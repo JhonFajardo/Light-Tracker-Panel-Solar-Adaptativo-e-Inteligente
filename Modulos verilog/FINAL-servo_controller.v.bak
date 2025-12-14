@@ -1,0 +1,52 @@
+module servo_ctrl (
+    input wire clk,             // 50 MHz
+    input wire rst_n,
+    input wire [7:0] angle,     // Ángulo deseado (0 a 180)
+    output reg pwm_out          // Señal hacia el servo
+);
+
+    // Cálculos de Temporización para 50MHz
+    // Periodo 20ms (50Hz) = 1,000,000 ciclos
+    localparam PERIOD_CYCLES = 1000000;
+    
+    // Anchos de pulso (Ajustables según tu servo)
+    // 0 grados   = 1.0ms = 50,000 ciclos
+    // 180 grados = 2.0ms = 100,000 ciclos
+    // Rango variable = 50,000 ciclos
+    // Factor = 50,000 / 180 = 277.77 (Aprox 278 ciclos por grado)
+    
+    localparam MIN_PULSE = 50000; 
+    
+    reg [19:0] counter;
+    reg [19:0] pulse_width;
+
+    // Cálculo del ancho de pulso basado en el ángulo
+    // Usamos lógica combinacional para actualizarlo inmediatamente
+    always @(*) begin
+        if (angle > 180) 
+            pulse_width = MIN_PULSE + (180 * 278); // Limitar a 180
+        else
+            pulse_width = MIN_PULSE + (angle * 278);
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            counter <= 0;
+            pwm_out <= 0;
+        end else begin
+            // Contador principal de 20ms
+            if (counter >= PERIOD_CYCLES - 1) begin
+                counter <= 0;
+            end else begin
+                counter <= counter + 1;
+            end
+
+            // Generación de PWM
+            if (counter < pulse_width)
+                pwm_out <= 1'b1;
+            else
+                pwm_out <= 1'b0;
+        end
+    end
+
+endmodule

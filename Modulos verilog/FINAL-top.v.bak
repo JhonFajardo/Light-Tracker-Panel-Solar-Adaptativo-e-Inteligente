@@ -1,0 +1,97 @@
+module SolarTracker_Top (
+    input wire clk,             // 50 MHz
+    input wire rst_n,           // Reset
+    input wire uart_rxd,        // RX Bluetooth
+    
+    // Salidas LCD
+    output wire lcd_rs, lcd_rw, lcd_en,
+    output wire [7:0] lcd_data,
+    
+    // Salidas Servos
+    output wire servo_azimut,   // Pin para el servo horizontal
+    output wire servo_elevacion,// Pin para el servo vertical
+    
+    // Debug LED
+    output wire led_rx          // Parpadea al recibir datos
+);
+
+    // --- Cables Internos ---
+    wire rx_ready;
+    wire [7:0] rx_byte;
+    
+    // Salidas del Parser (ASCII)
+    wire [7:0] w_az_h, w_az_t, w_az_u; // Azimut: Centena, Decena, Unidad
+    wire [7:0] w_el_t, w_el_u;         // Elevación: Decena, Unidad (Parser V2 ignora centena)
+    
+    // Cables Hora/Zona (Directo a LCD)
+    wire [7:0] w_th1, w_th0, w_tm1, w_tm0, w_ts1, w_ts0;
+    wire [7:0] w_zone;
+
+    // --- 1. UART RX ---
+    uart_rx #(.CLK_FREQ(50000000), .BAUD_RATE(9600)) uart (
+        .clk(clk), .rst_n(rst_n),
+        .rx_serial(uart_rxd),
+        .data_ready(rx_ready), .data_byte(rx_byte)
+    );
+    assign led_rx = rx_ready; // Visualizar tráfico
+
+    // --- 2. Parser V2 (AxxxEyyyHhhmmssI1) ---
+    bt_data_parser_v2 parser (
+        .clk(clk), .rst_n(rst_n),
+        .rx_done_tick(rx_ready), .rx_data(rx_byte),
+        .az_h(w_az_h), .az_t(w_az_t), .az_u(w_az_u),
+        .el_t(w_el_t), .el_u(w_el_u),
+        .time_h1(w_th1), .time_h0(w_th0),
+        .time_m1(w_tm1), .time_m0(w_tm0),
+        .time_s1(w_ts1), .time_s0(w_ts0),
+        .zone_id(w_zone)
+    );
+
+    // --- 3. Conversión ASCII a Entero para Servos ---
+    // ASCII '0' es 48 decimal. Restamos 48 para obtener el valor numérico.
+    
+    wire [8:0] azimut_int;
+    wire [8:0] elevacion_int;
+
+    // Cálculo Azimut (3 dígitos): (H*100) + (T*10) + U
+    assign azimut_int = ((w_az_h - 8'd48) * 100) + 
+                        ((w_az_t - 8'd48) * 10) + 
+                        (w_az_u - 8'd48);
+
+    // Cálculo Elevación (2 dígitos): (T*10) + U
+    assign elevacion_int = ((w_el_t - 8'd48) * 10) + 
+                           (w_el_u - 8'd48);
+
+    // --- 4. Controladores de Servo ---
+    
+    // Servo Horizontal (Azimut 0-180°)
+    servo_ctrl servo_h (
+        .clk(clk),
+        .rst_n(rst_n),
+        .angle(azimut_int[7:0]), // Tomamos 8 bits (suficiente para 0-180)
+        .pwm_out(servo_azimut)
+    );
+
+    // Servo Vertical (Elevación 0-90°)
+    // Nota: Si tu servo vertical necesita moverse diferente (ej: 0 es horizonte),
+    // podrías necesitar ajustar el ángulo aquí (ej: 90 - elevacion_int).
+    servo_ctrl servo_v (
+        .clk(clk),
+        .rst_n(rst_n),
+        .angle(elevacion_int[7:0]), 
+        .pwm_out(servo_elevacion)
+    );
+
+    // --- 5. Pantalla LCD Dual Screen ---
+    LCD1602_DualScreen lcd (
+        .clk(clk), .reset(rst_n),
+        .az_h(w_az_h), .az_t(w_az_t), .az_u(w_az_u),
+        .el_t(w_el_t), .el_u(w_el_u),
+        .t_h1(w_th1), .t_h0(w_th0),
+        .t_m1(w_tm1), .t_m0(w_tm0),
+        .t_s1(w_ts1), .t_s0(w_ts0),
+        .zone_id_ascii(w_zone),
+        .rs(lcd_rs), .rw(lcd_rw), .enable(lcd_en), .data(lcd_data)
+    );
+
+endmodule
