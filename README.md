@@ -31,12 +31,3 @@ Un sistema de seguimiento solar de dos ejes (Altazimutal) de alto rendimiento. E
 | **Pantalla** | LCD 1602A | Visualización de estado en tiempo real. |
 | **Potencia** | LM2596 (Buck Converter) | Regulación eficiente de 5V para servos y lógica. |
 | **Estructura** | MDF 3mm + PLA | Chasis y acoples mecánicos. |
-
-## 📂 Estructura del Proyecto
-
-```text
-├── /rtl            # Código fuente Verilog (Módulos, FSM, Top Level)
-├── /software       # Scripts de Python (Controlador Maestro)
-├── /cad            # Archivos DXF (Corte Láser) y STL (Impresión 3D)
-├── /docs           # Diagramas, Datasheets y Manuales
-└── README.md       # Documentación principal
